@@ -6,13 +6,8 @@ def read_coin(img_name: str) -> Image.Image:
     coin = coin.resize((78, 78))
     return coin
 
-
 def set_coin(coin: Image.Image, pos: tuple, bg: Image.Image):
-    alpha = 1.0
-    new_coin = Image.new("RGBA", coin.size)
-    new_coin = Image.blend(new_coin, coin, alpha)
-    bg.paste(new_coin, pos, new_coin)
-
+    bg.paste(coin, pos, coin)
 
 def main():
     coin = read_coin("ppoint-removebg-preview.png")
