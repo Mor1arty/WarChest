@@ -8,7 +8,10 @@ def read_coin(img_name: str) -> Image.Image:
 
 
 def set_coin(coin: Image.Image, pos: tuple, bg: Image.Image):
-    bg.paste(coin, pos)
+    alpha = 1.0
+    new_coin = Image.new("RGBA", coin.size)
+    new_coin = Image.blend(new_coin, coin, alpha)
+    bg.paste(new_coin, pos, new_coin)
 
 
 def main():
