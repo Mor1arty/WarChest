@@ -1,5 +1,6 @@
 from PIL import Image
 from enum import Enum
+from abc import ABC, abstractmethod
 
 
 def get_pixel_coordinate(logic_pos: tuple) -> tuple:
@@ -37,7 +38,81 @@ class UnitCoin(Enum):
     LIGHT_CAVALRY = "light_cavalry.png"
 
 
-class UIController(object):
+class Observer(ABC):
+    """
+    The Observer interface declares the update method, used by subjects.
+    """
+    @abstractmethod
+    def update(self, subject: Subject) -> None:
+        """
+        Receive update from subject.
+        :param subject:
+        :return:
+        """
+        pass
+
+
+class Subject(ABC):
+    """
+    The Subject interface declares a set of methods for managing subscribers.
+    """
+    @abstractmethod
+    def attach(self, observer: Observer) -> None:
+        """
+        Attach an observer to the subject.
+        :param observer: the observer to be added.
+        :return:
+        """
+        pass
+
+    @abstractmethod
+    def detach(self, observer: Observer) -> None:
+        """
+        Detach an observer from the subject.
+        :param observer: the observer to be removed.
+        :return:
+        """
+
+    @abstractmethod
+    def notify(self) -> None:
+        """
+        Notify all observers about an event.
+        :return:
+        """
+        pass
+
+
+class Coin(Subject):
+    """
+    The unit coin class, also called hero.
+    """
+    position = None
+    HP = 0
+
+    def __init__(self, faction: str, position: tuple = None):
+        self.control_marker = GlobalCoin.PHOENIX_CONTROL_MARKER if faction == 'phoenix' else \
+            GlobalCoin.LION_CONTROL_MARKER
+        if Coin.position is None:
+            Coin.position = position
+
+    def attach(self, observer: Observer) -> None:
+
+    def detach(self, observer: Observer) -> None:
+
+    def notify(self) -> None:
+
+    def placement(self, action: str):
+        if Coin.position is not None:
+            global ui
+            if action == 'deploy':
+                ui.set_coin(coin_name=self.control_marker, pos=self.position)
+                Coin.on_board = 1
+                self.HP = 1
+            if action == 'bolster':
+                pass
+
+
+class UIController(Observer):
     def __init__(self):
         self.background = Image.open("imgs/background.png")
         self.set_coin(coin_name=GlobalCoin.PHOENIX_CONTROL_MARKER, pos=get_pixel_coordinate((1, 0)))
@@ -50,7 +125,7 @@ class UIController(object):
         coin = UIController.__read_coin(img_path=img_path)
         self.background.paste(coin, pos, coin)
 
-    def display(self):
+    def update(self, subject: Subject) -> None:
         self.background.show()
 
     @staticmethod
@@ -67,7 +142,7 @@ def main():
     ui.set_coin(coin_name=UnitCoin.LIGHT_CAVALRY, pos=get_pixel_coordinate((2, 3)))
     ui.set_coin(coin_name=GlobalCoin.PHOENIX_CONTROL_MARKER, pos=get_pixel_coordinate((6, 2)))
 
-    ui.display()
+    ui.update()
 
 
 if __name__ == '__main__':
