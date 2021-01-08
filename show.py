@@ -7,6 +7,7 @@ def get_pixel_coordinate(logic_pos: tuple) -> tuple:
     """
     Return pixel coordinate according to coin's logical position.Let the most left down position be (0, 0).X and y
     increase along up and right direction respectively.
+
     :param logic_pos: coin's logic position.
     :return: coin's pixel position according to its logic position.
     """
@@ -38,51 +39,7 @@ class UnitCoin(Enum):
     LIGHT_CAVALRY = "light_cavalry.png"
 
 
-class Observer(ABC):
-    """
-    The Observer interface declares the update method, used by subjects.
-    """
-    @abstractmethod
-    def update(self, subject: Subject) -> None:
-        """
-        Receive update from subject.
-        :param subject:
-        :return:
-        """
-        pass
-
-
-class Subject(ABC):
-    """
-    The Subject interface declares a set of methods for managing subscribers.
-    """
-    @abstractmethod
-    def attach(self, observer: Observer) -> None:
-        """
-        Attach an observer to the subject.
-        :param observer: the observer to be added.
-        :return:
-        """
-        pass
-
-    @abstractmethod
-    def detach(self, observer: Observer) -> None:
-        """
-        Detach an observer from the subject.
-        :param observer: the observer to be removed.
-        :return:
-        """
-
-    @abstractmethod
-    def notify(self) -> None:
-        """
-        Notify all observers about an event.
-        :return:
-        """
-        pass
-
-
-class Coin(Subject):
+class Coin(object):
     """
     The unit coin class, also called hero.
     """
@@ -95,12 +52,6 @@ class Coin(Subject):
         if Coin.position is None:
             Coin.position = position
 
-    def attach(self, observer: Observer) -> None:
-
-    def detach(self, observer: Observer) -> None:
-
-    def notify(self) -> None:
-
     def placement(self, action: str):
         if Coin.position is not None:
             global ui
@@ -112,20 +63,24 @@ class Coin(Subject):
                 pass
 
 
-class UIController(Observer):
+class UIController(object):
+    _board = []  # 棋盘，记录棋盘上所有的棋子及其位置
+
     def __init__(self):
         self.background = Image.open("imgs/background.png")
-        self.set_coin(coin_name=GlobalCoin.PHOENIX_CONTROL_MARKER, pos=get_pixel_coordinate((1, 0)))
-        self.set_coin(coin_name=GlobalCoin.PHOENIX_CONTROL_MARKER, pos=get_pixel_coordinate((4, 0)))
-        self.set_coin(coin_name=GlobalCoin.LION_CONTROL_MARKER, pos=get_pixel_coordinate((2, 5)))
-        self.set_coin(coin_name=GlobalCoin.LION_CONTROL_MARKER, pos=get_pixel_coordinate((5, 4)))
+        UIController._board.append({GlobalCoin.PHOENIX_CONTROL_MARKER: get_pixel_coordinate((1, 0))})
+        UIController._board.append({GlobalCoin.PHOENIX_CONTROL_MARKER: get_pixel_coordinate((4, 0))})
+        UIController._board.append({GlobalCoin.LION_CONTROL_MARKER: get_pixel_coordinate(2, 5)})
+        UIController._board.append({GlobalCoin.LION_CONTROL_MARKER: get_pixel_coordinate(5, 4)})
 
     def set_coin(self, coin_name: Enum, pos: tuple):
         img_path = f"imgs/{coin_name.value}"
         coin = UIController.__read_coin(img_path=img_path)
         self.background.paste(coin, pos, coin)
 
-    def update(self, subject: Subject) -> None:
+    def update(self) -> None:
+        for item in UIController._board:
+            pass  # TODO
         self.background.show()
 
     @staticmethod
@@ -136,13 +91,7 @@ class UIController(Observer):
 
 
 def main():
-    ui = UIController()
-
-    ui.set_coin(coin_name=UnitCoin.LIGHT_CAVALRY, pos=get_pixel_coordinate((2, 3)))
-    ui.set_coin(coin_name=UnitCoin.LIGHT_CAVALRY, pos=get_pixel_coordinate((2, 3)))
-    ui.set_coin(coin_name=GlobalCoin.PHOENIX_CONTROL_MARKER, pos=get_pixel_coordinate((6, 2)))
-
-    ui.update()
+    pass
 
 
 if __name__ == '__main__':
