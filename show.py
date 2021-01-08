@@ -70,17 +70,18 @@ class UIController(object):
         self.background = Image.open("imgs/background.png")
         UIController._board.append({GlobalCoin.PHOENIX_CONTROL_MARKER: get_pixel_coordinate((1, 0))})
         UIController._board.append({GlobalCoin.PHOENIX_CONTROL_MARKER: get_pixel_coordinate((4, 0))})
-        UIController._board.append({GlobalCoin.LION_CONTROL_MARKER: get_pixel_coordinate(2, 5)})
-        UIController._board.append({GlobalCoin.LION_CONTROL_MARKER: get_pixel_coordinate(5, 4)})
+        UIController._board.append({GlobalCoin.LION_CONTROL_MARKER: get_pixel_coordinate((2, 5))})
+        UIController._board.append({GlobalCoin.LION_CONTROL_MARKER: get_pixel_coordinate((5, 4))})
 
-    def set_coin(self, coin_name: Enum, pos: tuple):
+    def set_coin(self, coin_name: Enum, pos: tuple) -> None:
         img_path = f"imgs/{coin_name.value}"
         coin = UIController.__read_coin(img_path=img_path)
         self.background.paste(coin, pos, coin)
 
-    def update(self) -> None:
+    def display(self) -> None:
         for item in UIController._board:
-            pass  # TODO
+            for coin_name, position in item.items():
+                self.set_coin(coin_name=coin_name, pos=position)
         self.background.show()
 
     @staticmethod
