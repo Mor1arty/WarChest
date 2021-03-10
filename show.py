@@ -1,23 +1,7 @@
 from PIL import Image
 from enum import Enum
-
-
-class GlobalCoin(Enum):
-    """
-    Image path of coins except unit coins.(I call them global coins)
-    Default in folder imgs/.
-    """
-    PHOENIX_CONTROL_MARKER = "phoenix_control_marker.png"
-    LION_CONTROL_MARKER = "lion_control_marker.png"
-    PHOENIX_ROYAL_COIN = "phoenix_royal_coin.png"
-    LION_ROYAL_COIN = "lion_royal_coin.png"
-
-
-class UnitCoin(Enum):
-    """
-    Image path of unit coins.(Default in folder imgs/)
-    """
-    LIGHT_CAVALRY = "light_cavalry.png"
+import game_object  #暂时用后台的数据结构。虽然前后端大概不会分离
+from game_object import TerrainType, UnitType  # Same as above
 
 
 class Piece(object):
@@ -43,12 +27,26 @@ class Board(object):
     def __iter__(self):
         return iter(self.grids)
 
+    def clear(self):
+        self.grids = []
+
 
 class UIController(object):
     def __init__(self):
         self.terrain_board = Board()  # 棋盘，记录棋盘上所有的地形及其位置
         self.coin_board = Board()  # 棋盘，记录棋盘上所有的棋子及其位置
         self.background = Image.open("imgs/background.png")
+
+    def set_board(self, new_board: game_object.Board):
+        self.coin_board.clear()
+        self.terrain_board.clear()
+        for row in range(len(new_board.grids)):
+            for col in range(len(new_board.grids[row])):
+                grid = new_board.grids[row][col]
+                if grid.terrain is not None:
+                    self.add_piece(grid.terrain.terrain_type.value, row, col, is_terrain=True)
+                if grid.unit is not None:  # TODO if unit has multi hp
+                    self.add_piece(grid.unit.unit_type.value, row, col, is_terrain=False)
 
     def set_piece(self, piece: Piece, pos, is_terrain=False):
         img = self.__read_coin(piece.img_path, is_terrain)
