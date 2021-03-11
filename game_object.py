@@ -23,6 +23,16 @@ class UnitType(Enum):
     Image path of unit coins.(Default in folder imgs/)
     """
     LIGHT_CAVALRY = "light_cavalry.png"
+    ARCHER = 1
+    BERSERKER = 2
+    CROSSBOWMAN = 3
+    ENSIGN = 4
+    FOOTMAN = 5
+    LANCER = 6
+    MARSHALL = 7
+    MERCENARY = 8
+    PIKEMAN = 9
+    WARRIOR＿PRIEST = 10
 
 
 class Coin(object):
