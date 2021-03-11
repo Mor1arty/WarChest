@@ -7,6 +7,8 @@
 from utils import singleton
 from game_object import Board, Terrain, TerrainType
 from player import Player
+from event import Event, EventType, EventManager
+
 
 @singleton
 class GameManager(object):
@@ -16,6 +18,7 @@ class GameManager(object):
 
     def game_start(self):
         self.board.init_1v1()
+        EventManager().notify(EventType.GAME_START)
 
     def try_deploy(self, player: Player, coin, pos) -> bool:
         # check validation
@@ -31,6 +34,7 @@ class GameManager(object):
 
     def deploy(self, coin, pos):
         self.board.add_coin(coin, pos)
+        EventManager().notify(EventType.DEPLOY_AFTER, event=Event(coin=coin, target=pos))
 
     def attack(self, attacker, defender):
         pass
