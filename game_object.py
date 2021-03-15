@@ -5,6 +5,7 @@
 # Description:
 # ----------------------------------------------------------------------
 from enum import Enum
+from unit import Unit, UnitType, UnitCard
 
 
 class TerrainType(Enum):
@@ -12,34 +13,11 @@ class TerrainType(Enum):
     Image path of coins except unit coins.(I call them global coins)
     Default in folder imgs/.
     """
-    PHOENIX_CONTROL_MARKER = "phoenix_control_marker.png"
-    LION_CONTROL_MARKER = "lion_control_marker.png"
-    PHOENIX_ROYAL_COIN = "phoenix_royal_coin.png"
-    LION_ROYAL_COIN = "lion_royal_coin.png"
-
-
-class UnitType(Enum):
-    """
-    Image path of unit coins.(Default in folder imgs/)
-    """
-    LIGHT_CAVALRY = "light_cavalry.png"
-    ARCHER = 1
-    BERSERKER = 2
-    CROSSBOWMAN = 3
-    ENSIGN = 4
-    FOOTMAN = 5
-    LANCER = 6
-    MARSHALL = 7
-    MERCENARY = 8
-    PIKEMAN = 9
-    WARRIOR＿PRIEST = 10
-
-
-class Coin(object):
-    def __init__(self, unit_type):
-        self.unit_type = unit_type  # 兵种
-        self.area = None
-        self.deploy_limit = 1
+    UNKNOWN = 0
+    PHOENIX_CONTROL_MARKER = "phoenix_control_marker"
+    LION_CONTROL_MARKER = "lion_control_marker"
+    PHOENIX_ROYAL_COIN = "phoenix_royal_coin"
+    LION_ROYAL_COIN = "lion_royal_coin"
 
 
 class Terrain (object):
@@ -48,26 +26,21 @@ class Terrain (object):
 
 
 class Area(object):
-    def __init__(self):
-        self.coins = []
+    def __init__(self, unit_types=None):
+        self.units = []
+        if unit_types is not None:
+            self.init_unit_types(unit_types)
 
+    def init_unit_types(self, unit_types):
+        for unit_type in unit_types:
+            self.units.append(Unit(unit_type))
 
-class Unit(Area):
-    def __init__(self, coin: Coin):
-        super().__init__()
-        self.coins = [coin]
-        coin.area = self
-        self.hp = 1
-        self.grid = None
+    def __getitem__(self, key):
+        return self.units[key]
 
     @property
-    def unit_type(self):
-        return self.coins[0].unit_type
-
-    def add_coin(self, coin):
-        self.coins.append(coin)
-        self.hp += 1
-        coin.area = self
+    def size(self):
+        return len(self.units)
 
 
 class Grid(object):

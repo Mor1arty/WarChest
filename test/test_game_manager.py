@@ -1,7 +1,7 @@
 import unittest
 from game_manager import GameManager
 from game_object import Coin
-from show import UIController, UnitType, TerrainType
+from ui import UIController, UnitType, TerrainType
 
 
 class TestGameManager(unittest.TestCase):
@@ -26,6 +26,8 @@ class TestGameManager(unittest.TestCase):
         ui = UIController()
         ui.set_board(gm.board)
         ui.display()
+
+
 
 
 if __name__ == '__main__':
