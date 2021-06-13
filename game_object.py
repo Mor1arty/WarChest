@@ -5,7 +5,7 @@
 # Description:
 # ----------------------------------------------------------------------
 from enum import Enum
-from unit import Unit, UnitType, UnitCard
+from unit import Unit, UnitType, UnitCard, Coin
 
 
 class TerrainType(Enum):
@@ -24,16 +24,26 @@ class Terrain (object):
     def __init__(self, terrain_type):
         self.terrain_type = terrain_type
 
+    def __str__(self):
+        return f"{self.terrain_type.name}"
+
 
 class Area(object):
-    def __init__(self, unit_types=None):
-        self.units = []
+    def __init__(self, unit_types: UnitType=None):
+        self.units: list = []
+        self.other_unit = Unit(UnitType.OTHERS)
         if unit_types is not None:
             self.init_unit_types(unit_types)
 
     def init_unit_types(self, unit_types):
         for unit_type in unit_types:
             self.units.append(Unit(unit_type))
+
+    def add_coin(self, coin: Coin):
+        pass
+
+    def remove_coin(self, coin: Coin):
+        pass
 
     def __getitem__(self, key):
         return self.units[key]
@@ -42,6 +52,14 @@ class Area(object):
     def size(self):
         return len(self.units)
 
+    @property
+    def coins(self):
+        coins = []
+        for unit in self.units:
+            for coin in unit.coins:
+                coins.append(coin)
+        return coins
+
 
 class Grid(object):
     def __init__(self):
@@ -49,16 +67,23 @@ class Grid(object):
         self.unit = None
 
     def add_coin(self, coin):
+        """
+        Add coin to a grid. If the grid have no unit, make a unit. Otherwise, stack (bolster).
+
+        """
         if self.unit is None:
-            self.unit = Unit(coin)
+            self.unit = Unit.create_unit_by_coin(coin)
             self.unit.grid = self
         else:
             self.unit.add_coin(coin)
 
+    def __str__(self):
+        return f"Terrain: {self.terrain}\nUnit: {self.unit}"
+
 
 class Board(object):
     def __init__(self, mode="1v1"):
-        self.grids = None
+        self.grids = None  # 2D list.
         if mode == "1v1":
             self.init_1v1()
 
@@ -72,9 +97,17 @@ class Board(object):
         self.grids[5][4].terrain = Terrain(TerrainType.LION_CONTROL_MARKER)
 
     def add_coin(self, coin, pos):
+        """
+        Add coin to specific location.
+
+        """
         self.grids[pos[0]][pos[1]].add_coin(coin)
 
     def unit_num(self, unit_type):
+        """
+        Calculate number of unit of specific unit types.
+
+        """
         num = 0
         for grid in self:
             if grid.unit is not None:

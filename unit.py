@@ -7,17 +7,13 @@
 from enum import Enum
 
 
-class UnitCard(object):
-    def __init__(self, unit_type=None):
-        self.unit_type = unit_type  # 兵种
-        self.deploy_limit = 1
-        self.coin_limit = 5  # TODO read config
 
 class UnitType(Enum):
     """
     Image path of unit coins.(Default in folder imgs/)
     """
     UNKNOWN = 0
+    OTHERS = 1
     LIGHT_CAVALRY = "light_cavalry"
     ARCHER = "light_cavalry"
     BERSERKER = "light_cavalry"
@@ -29,6 +25,13 @@ class UnitType(Enum):
     MERCENARY = 8
     PIKEMAN = 9
     WARRIOR_PRIEST = 10
+
+
+class UnitCard(object):
+    def __init__(self, unit_type: UnitType=None):
+        self.unit_type: UnitType = unit_type  # 兵种
+        self.deploy_limit = 1
+        self.coin_limit = 5  # TODO read config
 
 
 class Coin(UnitCard):
@@ -43,12 +46,12 @@ class Coin(UnitCard):
 
 
 class Unit(UnitCard):
-    def __init__(self, unit_type):
+    def __init__(self, unit_type: UnitType):
         super().__init__(unit_type)
-        self.coins = []
+        self.coins: list = []
         self.hp = 0
         self.area = None
-        self.grid = None  # position in board.
+        self.grid = None  # Area=Board only. position in board.
 
     @staticmethod
     def create_unit_by_coin(coin: Coin):
@@ -62,3 +65,6 @@ class Unit(UnitCard):
         self.coins.append(coin)
         self.hp += 1
         coin.area = self
+
+    def __str__(self):
+        return f"Unit type: {self.unit_type.name}\nHealth: {self.hp}\n"

@@ -31,5 +31,26 @@ class TestUIController(unittest.TestCase):
         ui.background.show()
 
 
+    def test_player_hand_display(self):
+        ui = UIController()
+        player1 = Player()
+        player1.unit_types = [UnitType.LIGHT_CAVALRY, UnitType.ARCHER, UnitType.BERSERKER, UnitType.CROSSBOWMAN]
+        # ui.player = player1
+
+        ui.display_player(player1)
+        ui.background.show()
+
+    # def test_deploy(self):
+    #     gm = GameManager()
+    #     gm.game_start()
+    #     coin = Coin(UnitType.LIGHT_CAVALRY)
+    #     gm.deploy(coin, pos=(1, 0))
+    #     ui = UIController()
+    #     ui.set_board(gm.board)
+    #     ui.display()
+
+
+
+
 if __name__ == '__main__':
     unittest.main()

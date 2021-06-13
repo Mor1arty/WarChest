@@ -20,11 +20,11 @@ class Player(object):
     def __init__(self):
         self.profile = None
         self._unit_types = None
-        self.hand = Area()
-        self.deck = Area()
-        self.supply = Area()
-        self.discard = Area()
-        self.graveyard = Area()
+        self.hand: Area = Area()
+        self.deck: Area = Area()
+        self.supply: Area = Area()
+        self.discard: Area = Area()
+        self.graveyard: Area = Area()
 
     @property
     def unit_types(self):

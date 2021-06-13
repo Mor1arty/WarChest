@@ -22,7 +22,7 @@ class GameManager(object):
         pass
 
     def game_start(self):
-        self.board.init_1v1()
+        self.board.init_1v1()  # init board
         EventManager().notify(EventType.GAME_START)
 
     def players_generator(self):

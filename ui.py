@@ -1,7 +1,7 @@
 from PIL import Image
 from enum import Enum
 import game_object  #暂时用后台的数据结构。虽然前后端大概不会分离
-import player # 同上
+from player import Player# 同上
 from game_object import TerrainType, UnitType  # Same as above
 from unit import UnitType
 
@@ -40,7 +40,7 @@ class UIController(object):
         self.background = Image.open("imgs/background.png")
         self.player = None
         self.player_supply_slots = [(18, 728), (118, 728), (218, 728), (318, 728)]  # slots[i] is the slot list of ith player.
-        self.player_hand_slots = []
+        self.player_hand_slots = [(632, 728), (762, 728), (982, 728)]
         self.player_discard_slots = []
         self.enemy = None
         self.enemy_supply_slots = []
@@ -75,8 +75,17 @@ class UIController(object):
             pos = area_slots[i]
             self.background.paste(img, pos, img)
 
-    def display_player(self, friendly_player):
+    def display_hand_area(self, area_slots, area):
+        for i in range(len(area.coins)):
+            coin = area.coins[i]
+            img = Image.open(UIPiece(coin.unit_type.value).img_path)
+            img = img.resize((78, 78))
+            pos = area_slots[i]
+            self.background.paste(img, pos, img)
+
+    def display_player(self, friendly_player: Player):
         self.display_area(self.player_supply_slots, friendly_player.supply)
+        self.display_hand_area(self.player_hand_slots, friendly_player.hand)
         pass
 
     # def display_hand(self, player_idx, coins):
