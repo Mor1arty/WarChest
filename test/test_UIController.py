@@ -1,7 +1,7 @@
 import unittest
 from ui import UIController, TerrainType
 from player import Player
-from unit import UnitType
+from unit import CoinType
 
 
 class TestUIController(unittest.TestCase):
@@ -13,10 +13,10 @@ class TestUIController(unittest.TestCase):
         ui.add_piece(name=TerrainType.LION_CONTROL_MARKER.value, x=2, y=5, is_terrain=True)
         ui.add_piece(name=TerrainType.LION_CONTROL_MARKER.value, x=5, y=4, is_terrain=True)
 
-        ui.add_piece(name=UnitType.LIGHT_CAVALRY.value, x=1, y=0)
-        ui.add_piece(name=UnitType.LIGHT_CAVALRY.value, x=2, y=2)
-        ui.add_piece(name=UnitType.LIGHT_CAVALRY.value, x=2, y=5)
-        ui.add_piece(name=UnitType.LIGHT_CAVALRY.value, x=4, y=0)
+        ui.add_piece(name=CoinType.LIGHT_CAVALRY.value, x=1, y=0)
+        ui.add_piece(name=CoinType.LIGHT_CAVALRY.value, x=2, y=2)
+        ui.add_piece(name=CoinType.LIGHT_CAVALRY.value, x=2, y=5)
+        ui.add_piece(name=CoinType.LIGHT_CAVALRY.value, x=4, y=0)
 
         ui.display_board()
         ui.background.show()
@@ -24,7 +24,7 @@ class TestUIController(unittest.TestCase):
     def test_player_supply_display(self):
         ui = UIController()
         player1 = Player()
-        player1.unit_types = [UnitType.LIGHT_CAVALRY, UnitType.ARCHER, UnitType.BERSERKER, UnitType.CROSSBOWMAN]
+        player1.unit_types = [CoinType.LIGHT_CAVALRY, CoinType.ARCHER, CoinType.BERSERKER, CoinType.CROSSBOWMAN]
         # ui.player = player1
 
         ui.display_player(player1)
@@ -34,7 +34,7 @@ class TestUIController(unittest.TestCase):
     def test_player_hand_display(self):
         ui = UIController()
         player1 = Player()
-        player1.unit_types = [UnitType.LIGHT_CAVALRY, UnitType.ARCHER, UnitType.BERSERKER, UnitType.CROSSBOWMAN]
+        player1.unit_types = [CoinType.LIGHT_CAVALRY, CoinType.ARCHER, CoinType.BERSERKER, CoinType.CROSSBOWMAN]
         # ui.player = player1
 
         ui.display_player(player1)

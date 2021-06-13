@@ -4,6 +4,7 @@
 # Author: arshart@forevernine.com
 # Description: 
 # ----------------------------------------------------------------------
+from unit import CoinType
 from utils import singleton
 from game_object import Board, Terrain, TerrainType
 from player import Player
@@ -21,11 +22,24 @@ class GameManager(object):
         self.is_initiative_change_this_turn = False
         pass
 
+    def draft(self):
+        # TODO
+        player1 = Player(fiction_type=CoinType.LION)
+        player1.unit_types = [CoinType.LIGHT_CAVALRY, CoinType.ARCHER, CoinType.BERSERKER, CoinType.CROSSBOWMAN]
+        player2 = Player(fiction_type=CoinType.PHOENIX)
+        player2.unit_types = [CoinType.ENSIGN, CoinType.FOOTMAN, CoinType.LANCER, CoinType.MARSHALL]
+        self.players = [player1, player2]
+
     def game_start(self):
+        self.draft()  # each player choose their unit.
         self.board.init_1v1()  # init board
         EventManager().notify(EventType.GAME_START)
 
     def players_generator(self):
+        """
+        Generator player by initiative order.
+
+        """
         if self.initiative_player not in self.players:
             logging.error(f"{self.initiative_player} is not in {self.players}!")
         index = 0

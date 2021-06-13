@@ -2,8 +2,8 @@ from PIL import Image
 from enum import Enum
 import game_object  #暂时用后台的数据结构。虽然前后端大概不会分离
 from player import Player# 同上
-from game_object import TerrainType, UnitType  # Same as above
-from unit import UnitType
+from game_object import TerrainType, CoinType  # Same as above
+from unit import CoinType
 
 
 class UIPiece(object):
@@ -12,8 +12,8 @@ class UIPiece(object):
 
     @property
     def img_path(self) -> str:
-        return f"imgs/{self.name}.png"
-
+        # return f"imgs/{self.name}.png"
+        return "imgs/light_cavalry.png"
 
 class Grid(object):
     def __init__(self, x=0, y=0, piece=None):

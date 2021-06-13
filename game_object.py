@@ -5,7 +5,7 @@
 # Description:
 # ----------------------------------------------------------------------
 from enum import Enum
-from unit import Unit, UnitType, UnitCard, Coin
+from unit import Unit, CoinType, UnitCard, Coin
 
 
 class TerrainType(Enum):
@@ -29,9 +29,9 @@ class Terrain (object):
 
 
 class Area(object):
-    def __init__(self, unit_types: UnitType=None):
+    def __init__(self, unit_types: CoinType=None):
         self.units: list = []
-        self.other_unit = Unit(UnitType.OTHERS)
+        self.other_unit = Unit(CoinType.OTHERS)
         if unit_types is not None:
             self.init_unit_types(unit_types)
 
@@ -40,17 +40,30 @@ class Area(object):
             self.units.append(Unit(unit_type))
 
     def add_coin(self, coin: Coin):
-        pass
+        for unit in self.units:
+            if unit.unit_type == coin.unit_type:
+                unit.add_coin(coin)
+                return
+        self.other_unit.add_coin(coin)
 
-    def remove_coin(self, coin: Coin):
-        pass
+    def pop_coin(self, coin: Coin):
+        for unit in self.units:
+            if unit.unit_type == coin.unit_type:
+                return unit.pop_coin()
+        return self.other_unit.pop_coin(coin)
+
+    def pop_coin_by_type(self, unit_type: CoinType):
+        for unit in self.units:
+            if unit.unit_type == unit_type:
+                return unit.pop_coin()
+        return self.other_unit.pop_coin(unit_type)
 
     def __getitem__(self, key):
         return self.units[key]
 
     @property
     def size(self):
-        return len(self.units)
+        return len(self.coins)
 
     @property
     def coins(self):
@@ -58,7 +71,15 @@ class Area(object):
         for unit in self.units:
             for coin in unit.coins:
                 coins.append(coin)
-        return coins
+        return coins + self.other_unit.coins
+
+    def __str__(self):
+        info = f"The area have {self.size} coins\n"
+        for unit in self.units:
+            info += str(unit) + '\n'
+        info += str(','.join(str(coin) for coin in self.other_unit.coins))
+        return info
+
 
 
 class Grid(object):
