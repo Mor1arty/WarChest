@@ -20,6 +20,8 @@ const (
 	UnitTypePickman
 	UnitTypeCrossbowman
 	UnitTypeMarshal
+
+	UnitTypeMax
 )
 
 type MovementDirectionType int
@@ -116,15 +118,4 @@ var UnitDefinitions = map[UnitType]UnitDefinition{
 		AttackType:   AttackDirectionTypeStraight,
 		Abilities:    []string{},
 	},
-}
-
-// 获取单位定义的辅助函数
-func GetUnitDefinition(unitType UnitType) (UnitDefinition, bool) {
-	def, exists := UnitDefinitions[unitType]
-	return def, exists
-}
-
-// 获取所有单位定义
-func GetAllUnitDefinitions() map[UnitType]UnitDefinition {
-	return UnitDefinitions
 }

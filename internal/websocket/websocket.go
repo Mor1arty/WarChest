@@ -1,12 +1,15 @@
 package websocket
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
 
-	"github.com/gorilla/websocket"
+	"github.com/Mor1arty/WarChest/internal/service"
 	"github.com/Mor1arty/WarChest/pkg/utils"
+	"github.com/gorilla/websocket"
 )
 
 type Client struct {
@@ -15,10 +18,11 @@ type Client struct {
 }
 
 type WebSocketServer struct {
-	upgrader websocket.Upgrader
-	port     string
-	clients  map[string]*Client
-	mutex    sync.RWMutex
+	upgrader    websocket.Upgrader
+	port        string
+	clients     map[string]*Client
+	mutex       sync.RWMutex
+	gameService *service.GameService
 }
 
 func checkOrigin(r *http.Request) bool {
@@ -31,8 +35,9 @@ func NewWebSocketServer(port string) *WebSocketServer {
 		upgrader: websocket.Upgrader{
 			CheckOrigin: checkOrigin,
 		},
-		port:     port,
-		clients:  make(map[string]*Client),
+		port:        port,
+		clients:     make(map[string]*Client),
+		gameService: service.NewGameService(),
 	}
 }
 
@@ -45,7 +50,7 @@ func (ws *WebSocketServer) handleConnection(w http.ResponseWriter, r *http.Reque
 	}
 
 	// 为新客户端创建唯一ID
-	clientID := utils.GenerateRandomID()
+	clientID := utils.GenerateUUID()
 	client := &Client{
 		ID:   clientID,
 		Conn: conn,
@@ -56,7 +61,19 @@ func (ws *WebSocketServer) handleConnection(w http.ResponseWriter, r *http.Reque
 	defer ws.unregisterClient(client)
 
 	// 发送欢迎消息
-	ws.SendToClient(client, "欢迎连接到服务器！你的ID是: "+clientID)
+	welcomeData := map[string]interface{}{
+		"type": "WELCOME",
+		"payload": map[string]interface{}{
+			"success":  true,
+			"clientID": clientID,
+		},
+	}
+	jsonWelcomeData, err := json.Marshal(welcomeData)
+	if err != nil {
+		log.Printf("JSON序列化错误: %v", err)
+		return
+	}
+	ws.SendToClient(client, string(jsonWelcomeData))
 
 	// 处理接收到的消息
 	ws.handleMessages(client)
@@ -81,20 +98,52 @@ func (ws *WebSocketServer) unregisterClient(client *Client) {
 	}
 }
 
-// handleMessages 处理来自客户端的消息
+// 定义客户端消息结构
+type ClientMessage struct {
+	Type    string      `json:"type"`
+	Payload interface{} `json:"payload"`
+}
+
+// 修改 handleMessages 函数
 func (ws *WebSocketServer) handleMessages(client *Client) {
 	for {
-		messageType, message, err := client.Conn.ReadMessage()
+		_, message, err := client.Conn.ReadMessage()
 		if err != nil {
 			log.Printf("读取消息错误: %v", err)
 			break
 		}
 
-		// 处理接收到的消息
-		log.Printf("收到来自 %s 的消息: %s", client.ID, string(message))
+		// 解析客户端消息
+		var clientMsg ClientMessage
+		if err := json.Unmarshal(message, &clientMsg); err != nil {
+			log.Printf("解析消息失败: %v", err)
+			continue
+		}
 
-		// 广播消息给所有客户端
-		ws.BroadcastMessage(messageType, message)
+		// 根据消息类型处理
+		switch clientMsg.Type {
+		case "UPDATE_GAME_STATE":
+			fmt.Println("更新游戏状态")
+			gameState := ws.gameService.GetGameState()
+			response := map[string]interface{}{
+				"type": "UPDATE_GAME_STATE",
+				"payload": map[string]interface{}{
+					"success":   true,
+					"changes":   []string{},
+					"gameState": gameState,
+				},
+			}
+
+			jsonResponse, err := json.Marshal(response)
+			if err != nil {
+				log.Printf("JSON序列化错误: %v", err)
+				continue
+			}
+
+			ws.SendToClient(client, string(jsonResponse))
+		default:
+			log.Printf("未知的消息类型: %s", clientMsg.Type)
+		}
 	}
 }
 
@@ -128,4 +177,4 @@ func (ws *WebSocketServer) GetConnectedClients() int {
 	ws.mutex.RLock()
 	defer ws.mutex.RUnlock()
 	return len(ws.clients)
-} 
+}

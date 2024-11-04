@@ -2,7 +2,6 @@ package game
 
 import (
 	"sync"
-	"time"
 )
 
 // GameStage 游戏阶段
@@ -28,7 +27,7 @@ type GameState struct {
 	Initiative    string `json:"initiative"`
 
 	// 玩家信息
-	Players map[string]*Player `json:"players"` // key: playerId
+	Players []*Player `json:"players"`
 
 	// 单位信息
 	Units map[string]*Unit `json:"units"` // key: unitId
@@ -44,20 +43,30 @@ type GameState struct {
 }
 
 // NewGameState 创建新的游戏状态
-func NewGameState(gameID string, players map[string]*Player) *GameState {
+func NewGameState(gameID string, players []*Player, initiative string) *GameState {
+	units := make(map[string]*Unit)
+	for _, player := range players {
+		for _, unit := range player.Supply {
+			units[unit.ID] = unit
+		}
+		for _, unit := range player.Hand {
+			units[unit.ID] = unit
+		}
+		for _, unit := range player.Bag {
+			units[unit.ID] = unit
+		}
+		for _, unit := range player.DiscardPile {
+			units[unit.ID] = unit
+		}
+	}
 	return &GameState{
 		GameID:       gameID,
 		Stage:        GameStageWaiting,
 		CurrentTurn:  0,
+		Initiative:   initiative,
 		Players:      players,
 		Units:        make(map[string]*Unit),
-		Board: &Board{
-			Size: BoardSize{
-				Width:  11,  // 设置默认棋盘大小
-				Height: 11,
-			},
-			Cells: make(map[string]*BoardCell),
-		},
+		Board:        CreateBoard(len(players)),
 		ActionPoints: make(map[string]int),
 		History:      make([]HistoryRecord, 0),
 	}
@@ -69,8 +78,12 @@ func NewGameState(gameID string, players map[string]*Player) *GameState {
 func (gs *GameState) GetPlayer(playerID string) (*Player, bool) {
 	gs.mutex.RLock()
 	defer gs.mutex.RUnlock()
-	player, exists := gs.Players[playerID]
-	return player, exists
+	for _, player := range gs.Players {
+		if player.ID == playerID {
+			return player, true
+		}
+	}
+	return nil, false
 }
 
 // GetUnit 获取单位信息
@@ -97,10 +110,6 @@ func (gs *GameState) GetCell(position string) *BoardCell {
 func (gs *GameState) AddHistoryRecord(actions []GameAction) {
 	gs.mutex.Lock()
 	defer gs.mutex.Unlock()
-	gs.History = append(gs.History, HistoryRecord{
-		Actions:   actions,
-		Timestamp: time.Now().Unix(),
-	})
 }
 
 // UpdateStage 更新游戏阶段

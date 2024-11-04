@@ -16,6 +16,7 @@ const (
 	GameActionTypeRecruit
 	GameActionTypePass
 	GameActionTypeControl
+	GameActionTypeClear
 )
 
 type ServerActionType int

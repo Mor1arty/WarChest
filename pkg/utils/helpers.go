@@ -3,17 +3,25 @@ package utils
 import (
 	"fmt"
 	"math/rand"
-	"strconv"
-	"strings"
 	"time"
 
-	gamemap "github.com/Mor1arty/WarChest/internal/game"
+	"github.com/Mor1arty/WarChest/internal/game"
 )
 
-// GenerateRandomID 随机相关
-func GenerateRandomID() string {
+// GenerateUUID 随机相关
+func GenerateUUID() string {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return fmt.Sprintf("%08d", r.Intn(100000000))
+}
+
+func GenerateUnit(t game.UnitType, o string, s game.UnitStatus) *game.Unit {
+	id := "unit_" + GenerateUUID()
+	return &game.Unit{
+		ID:     id,
+		Type:   t,
+		Owner:  o,
+		Status: s,
+	}
 }
 
 // ShuffleBag 棋子袋操作相关
@@ -35,22 +43,22 @@ func WrapError(err error, message string) error {
 	return fmt.Errorf("%s: %w", message, err)
 }
 
-func Cube2String(c gamemap.Position) string {
-	return strings.Join([]string{string(rune(c.Q)), string(rune(c.R)), string(rune(c.S))}, ",")
+// 获取单位定义的辅助函数
+func GetUnitDefinition(unitType game.UnitType) (game.UnitDefinition, bool) {
+	def, exists := game.UnitDefinitions[unitType]
+	return def, exists
 }
 
-func String2Cube(s string) gamemap.Position {
-	cube := strings.Split(s, ",")
-	_q, qerr := strconv.Atoi(cube[0])
-	_r, rerr := strconv.Atoi(cube[1])
-	_s, serr := strconv.Atoi(cube[2])
-	if qerr != nil || rerr != nil || serr != nil {
-		return gamemap.Position{}
+// 获取所有单位
+func GetAllUnits() []game.UnitType {
+	units := make([]game.UnitType, 0, int(game.UnitTypeMax))
+	for i := game.UnitType(0); i < game.UnitTypeMax; i++ {
+		units = append(units, i)
 	}
+	return units
+}
 
-	return gamemap.Position{
-		Q: _q,
-		R: _r,
-		S: _s,
-	}
+// 获取所有单位定义
+func GetAllUnitDefinitions() map[game.UnitType]game.UnitDefinition {
+	return game.UnitDefinitions
 }
