@@ -3,8 +3,8 @@ package game
 type Team int
 
 const (
-	TeamWhite Team = iota
-	TeamBlack
+	TeamWhite Team = 100
+	TeamBlack Team = 200
 )
 
 type Player struct {

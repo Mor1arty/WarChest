@@ -21,6 +21,7 @@ const (
 	UnitTypeCrossbowman
 	UnitTypeMarshal
 
+	UnitTypeCoinBack
 	UnitTypeMax
 )
 

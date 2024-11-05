@@ -6,15 +6,31 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
+	"github.com/Mor1arty/WarChest/internal/game"
 	"github.com/Mor1arty/WarChest/internal/service"
 	"github.com/Mor1arty/WarChest/pkg/utils"
+	"github.com/golang-jwt/jwt"
 	"github.com/gorilla/websocket"
+	"golang.org/x/exp/rand"
+)
+
+const (
+	pingInterval = 30 * time.Second // 发送 ping 的间隔
+	pongWait     = 60 * time.Second // 等待 pong 响应的超时时间
+	writeWait    = 10 * time.Second // 写入超时
 )
 
 type Client struct {
-	ID   string
-	Conn *websocket.Conn
+	ID     string
+	Conn   *websocket.Conn
+	UserID string
+	Send   chan []byte // 消息发送通道
+}
+
+type AuthPayload struct {
+	Token string `json:"token"`
 }
 
 type WebSocketServer struct {
@@ -23,6 +39,10 @@ type WebSocketServer struct {
 	clients     map[string]*Client
 	mutex       sync.RWMutex
 	gameService *service.GameService
+	authService *service.AuthHandler
+	rooms       map[string]*game.GameRoom // 游戏房间映射
+	userRooms   map[string]string         // 用户ID到房间ID的映射
+	roomMutex   sync.RWMutex
 }
 
 func checkOrigin(r *http.Request) bool {
@@ -30,7 +50,7 @@ func checkOrigin(r *http.Request) bool {
 }
 
 // NewWebSocketServer 创建一个新的 WebSocket 服务器实例
-func NewWebSocketServer(port string) *WebSocketServer {
+func NewWebSocketServer(port string, authService *service.AuthHandler) *WebSocketServer {
 	return &WebSocketServer{
 		upgrader: websocket.Upgrader{
 			CheckOrigin: checkOrigin,
@@ -38,45 +58,65 @@ func NewWebSocketServer(port string) *WebSocketServer {
 		port:        port,
 		clients:     make(map[string]*Client),
 		gameService: service.NewGameService(),
+		authService: authService,
+		rooms:       make(map[string]*game.GameRoom),
+		userRooms:   make(map[string]string),
+		roomMutex:   sync.RWMutex{},
 	}
 }
 
-// handleConnection 处理单个 WebSocket 连接
-func (ws *WebSocketServer) handleConnection(w http.ResponseWriter, r *http.Request) {
+// HandleConnection 处理新的 WebSocket 连接
+func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Request) {
+	// 1. 从 URL 参数获取 token
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		log.Printf("未提供 token")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// 2. 使用 authService 验证 token
+	jwtToken, err := ws.authService.ValidateToken(token)
+	if err != nil {
+		log.Printf("token 验证失败: %v", err)
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	// 3. 获取用户信息
+	claims := jwtToken.Claims.(jwt.MapClaims)
+	userID := claims["sub"].(string)
+
+	// 4. 升级连接
 	conn, err := ws.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("升级连接失败: %v", err)
 		return
 	}
 
-	// 为新客户端创建唯一ID
-	clientID := utils.GenerateUUID()
 	client := &Client{
-		ID:   clientID,
-		Conn: conn,
+		ID:     utils.GenerateUUID(),
+		Conn:   conn,
+		UserID: userID,
+		Send:   make(chan []byte, 256),
 	}
+
+	// 设置读取超时
+	client.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	client.Conn.SetPongHandler(func(string) error {
+		client.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
 
 	// 注册客户端
 	ws.registerClient(client)
-	defer ws.unregisterClient(client)
 
-	// 发送欢迎消息
-	welcomeData := map[string]interface{}{
-		"type": "WELCOME",
-		"payload": map[string]interface{}{
-			"success":  true,
-			"clientID": clientID,
-		},
-	}
-	jsonWelcomeData, err := json.Marshal(welcomeData)
-	if err != nil {
-		log.Printf("JSON序列化错误: %v", err)
-		return
-	}
-	ws.SendToClient(client, string(jsonWelcomeData))
+	// 启动读写 goroutines
+	go ws.writePump(client)
+	go ws.readPump(client)
 
-	// 处理接收到的消息
-	ws.handleMessages(client)
+	// 7. 发送连接成功消息
+	ws.SendToClient(client, `{"type":"CONNECTED","payload":{"message":"连接成功","userId":"`+userID+`"}}`)
 }
 
 // registerClient 注册新客户端
@@ -104,52 +144,125 @@ type ClientMessage struct {
 	Payload interface{} `json:"payload"`
 }
 
-// 修改 handleMessages 函数
-func (ws *WebSocketServer) handleMessages(client *Client) {
+// readPump 处理从客户端读取消息
+func (ws *WebSocketServer) readPump(client *Client) {
+	defer func() {
+		ws.unregisterClient(client)
+	}()
+
 	for {
 		_, message, err := client.Conn.ReadMessage()
 		if err != nil {
-			log.Printf("读取消息错误: %v", err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("读取错误: %v", err)
+			}
 			break
 		}
 
-		// 解析客户端消息
+		// 处理消息
 		var clientMsg ClientMessage
 		if err := json.Unmarshal(message, &clientMsg); err != nil {
 			log.Printf("解析消息失败: %v", err)
 			continue
 		}
 
-		// 根据消息类型处理
+		// 处理消息
 		switch clientMsg.Type {
+		case "CHECK_GAME":
+			log.Printf(client.UserID + " Check game")
+			ws.checkGameMatch(client)
+		case "JOIN_GAME":
+			log.Printf(client.UserID + " Join game")
+			ws.handleGameMatch(client)
+		case "LEAVE_ROOM":
+			log.Printf(client.UserID + " Leave room")
+			ws.handleLeaveRoom(client)
 		case "UPDATE_GAME_STATE":
-			fmt.Println("更新游戏状态")
-			gameState := ws.gameService.GetGameState()
-			response := map[string]interface{}{
-				"type": "UPDATE_GAME_STATE",
-				"payload": map[string]interface{}{
-					"success":   true,
-					"changes":   []string{},
-					"gameState": gameState,
-				},
-			}
-
-			jsonResponse, err := json.Marshal(response)
-			if err != nil {
-				log.Printf("JSON序列化错误: %v", err)
+			ws.roomMutex.RLock()
+			roomID, exists := ws.userRooms[client.UserID]
+			if !exists {
+				ws.roomMutex.RUnlock()
 				continue
 			}
+			room, exists := ws.rooms[roomID]
+			if !exists || room.GameState == nil {
+				ws.roomMutex.RUnlock()
+				continue
+			}
+			gameID := room.GameState.GameID
+			ws.roomMutex.RUnlock()
 
-			ws.SendToClient(client, string(jsonResponse))
-		default:
-			log.Printf("未知的消息类型: %s", clientMsg.Type)
+			if gameState, exists := ws.gameService.GetGame(gameID); exists {
+				response := map[string]interface{}{
+					"type": "UPDATE_GAME_STATE",
+					"payload": map[string]interface{}{
+						"success":   true,
+						"changes":   []string{},
+						"gameState": gameState,
+					},
+				}
+				jsonResponse, _ := json.Marshal(response)
+				client.Send <- jsonResponse
+			}
+		case "PING":
+			response := ClientMessage{
+				Type: "PONG",
+				Payload: map[string]interface{}{
+					"time": time.Now().Unix(),
+				},
+			}
+			jsonResponse, _ := json.Marshal(response)
+			client.Send <- jsonResponse
 		}
 	}
 }
 
-// SendToClient 向特定客户端发送消息
+// writePump 处理向客户端发送消息
+func (ws *WebSocketServer) writePump(client *Client) {
+	ticker := time.NewTicker(pingInterval)
+	defer func() {
+		ticker.Stop()
+		client.Conn.Close()
+	}()
+
+	for {
+		select {
+		case message, ok := <-client.Send:
+			client.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if !ok {
+				// Send channel 已关闭
+				client.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			w, err := client.Conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+			w.Write(message)
+
+			if err := w.Close(); err != nil {
+				return
+			}
+
+		case <-ticker.C:
+			client.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := client.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
+}
+
+// SendToClient 发送消息给指定客户端
 func (ws *WebSocketServer) SendToClient(client *Client, message string) error {
-	return client.Conn.WriteMessage(websocket.TextMessage, []byte(message))
+	select {
+	case client.Send <- []byte(message):
+		return nil
+	default:
+		ws.unregisterClient(client)
+		return fmt.Errorf("client message buffer is full")
+	}
 }
 
 // BroadcastMessage 向所有客户端广播消息
@@ -165,16 +278,136 @@ func (ws *WebSocketServer) BroadcastMessage(messageType int, message []byte) {
 	}
 }
 
-// Start 启动 WebSocket 服务器
-func (ws *WebSocketServer) Start() error {
-	http.HandleFunc("/ws", ws.handleConnection)
-	log.Printf("WebSocket 服务器启动在 %s 端口...", ws.port)
-	return http.ListenAndServe(ws.port, nil)
+// 检查是否有正在进行中的游戏
+func (ws *WebSocketServer) checkGameMatch(client *Client) {
+	ws.roomMutex.Lock()
+	defer ws.roomMutex.Unlock()
+
+	if room, exists := ws.userRooms[client.UserID]; exists {
+		if game, exists := ws.rooms[room]; exists {
+			ws.SendToClient(client, `{"type":"GAME_MATCH_FOUND","payload":{"roomId":"`+game.ID+`"}}`)
+		}
+	}
 }
 
-// GetConnectedClients 获取当前连接的客户端数量
-func (ws *WebSocketServer) GetConnectedClients() int {
-	ws.mutex.RLock()
-	defer ws.mutex.RUnlock()
-	return len(ws.clients)
+// 添加新方法来处理游戏匹配
+func (ws *WebSocketServer) handleGameMatch(client *Client) {
+	ws.roomMutex.Lock()
+	defer ws.roomMutex.Unlock()
+
+	// 1. 查找等待中的房间
+	var availableRoom *game.GameRoom
+	for _, room := range ws.rooms {
+		if room.Status == game.RoomStatusWaiting && len(room.Players) < room.MaxPlayers {
+			availableRoom = room
+			break
+		}
+	}
+
+	// 2. 如果没有可用房间，创建新房间
+	if availableRoom == nil {
+		roomID := utils.GenerateUUID()
+		availableRoom = game.NewGameRoom(roomID)
+		ws.rooms[roomID] = availableRoom
+	}
+
+	// 3. 将玩家加入房间
+	playerRole := game.TeamWhite
+	if len(availableRoom.Players) > 0 {
+		for _, role := range availableRoom.Players {
+			if role == game.TeamBlack {
+				playerRole = game.TeamWhite
+			} else {
+				playerRole = game.TeamBlack
+			}
+		}
+	} else {
+		if rand.Intn(2) == 0 {
+			playerRole = game.TeamBlack
+		}
+	}
+	availableRoom.Players[client.UserID] = playerRole
+	ws.userRooms[client.UserID] = availableRoom.ID
+
+	// 4. 如果房间满员，开始游戏
+	if len(availableRoom.Players) == availableRoom.MaxPlayers {
+		log.Printf("create new game")
+		availableRoom.Status = game.RoomStatusPlaying
+		availableRoom.GameState = ws.gameService.CreateNewGame(availableRoom.Players)
+
+		// 通知房间内所有玩家游戏开始
+		ws.broadcastToRoom(availableRoom.ID, map[string]interface{}{
+			"type": "UPDATE_GAME_STATE",
+			"payload": map[string]interface{}{
+				"roomId":    availableRoom.ID,
+				"gameState": availableRoom.GameState,
+			},
+		})
+	} else {
+		// 通知玩家等待对手
+		log.Printf("waiting for opponent: " + availableRoom.ID)
+		ws.SendToClient(client, `{"type":"WAITING_FOR_OPPONENT","payload":{"roomId":"`+availableRoom.ID+`"}}`)
+	}
+}
+
+// 广播消息给房间内的所有玩家
+func (ws *WebSocketServer) broadcastToRoom(roomID string, message interface{}) {
+	room, exists := ws.rooms[roomID]
+
+	log.Printf("here here")
+	if !exists {
+		log.Printf("room not found: " + roomID)
+		return
+	}
+	log.Printf("broadcast to room: " + roomID)
+
+	jsonMessage, _ := json.Marshal(message)
+
+	for userID := range room.Players {
+		for _, client := range ws.clients {
+			if client.UserID == userID {
+				client.Send <- jsonMessage
+				break
+			}
+		}
+	}
+}
+
+// 离开房间
+func (ws *WebSocketServer) handleLeaveRoom(client *Client) {
+	ws.roomMutex.Lock()
+	defer ws.roomMutex.Unlock()
+	// 清理房间关系
+	if roomID, exists := ws.userRooms[client.UserID]; exists {
+		if room, exists := ws.rooms[roomID]; exists {
+			// 从房间中移除玩家
+			delete(room.Players, client.UserID)
+			// 如果房间空了，删除房间
+			if len(room.Players) == 0 {
+				delete(ws.rooms, roomID)
+			}
+		}
+		// 删除用户到房间的映射
+		delete(ws.userRooms, client.UserID)
+	}
+}
+
+func (ws *WebSocketServer) cleanupRooms() {
+	// ws.roomMutex.Lock()
+	// defer ws.roomMutex.Unlock()
+
+	// for roomID, room := range ws.rooms {
+	// 	if room.Status == game.RoomStatusFinished {
+	// 		// 清理游戏状态
+	// 		if room.GameState != nil {
+	// 			ws.gameService.RemoveGame(room.GameState.GameID)
+	// 		}
+	// 		// 清理用户到房间的映射
+	// 		for userID := range room.Players {
+	// 			delete(ws.userRooms, userID)
+	// 		}
+	// 		// 删除房间
+	// 		delete(ws.rooms, roomID)
+	// 	}
+	// }
 }
