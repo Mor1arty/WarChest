@@ -4,22 +4,11 @@ import (
 	"sync"
 )
 
-// GameStage 游戏阶段
-type GameStage int
-
-const (
-	GameStageWaiting GameStage = iota
-	GameStageBanPick
-	GameStagePlaying
-	GameStageFinished
-)
-
 type GameState struct {
 	mutex sync.RWMutex `json:"-"` // 互斥锁，不进行JSON序列化
 
 	// 游戏基础信息
-	GameID string    `json:"gameId"`
-	Stage  GameStage `json:"stage"`
+	GameID string `json:"gameId"`
 
 	// 回合信息
 	CurrentTurn   int    `json:"currentTurn"`
@@ -34,9 +23,6 @@ type GameState struct {
 
 	// 棋盘信息
 	Board *Board `json:"board"`
-
-	// 行动点数/资源
-	ActionPoints map[string]int `json:"actionPoints"` // key: playerId
 
 	// 游戏历史记录
 	History []HistoryRecord `json:"history"`
@@ -60,15 +46,13 @@ func NewGameState(gameID string, players []*Player, initiative string) *GameStat
 		}
 	}
 	return &GameState{
-		GameID:       gameID,
-		Stage:        GameStageWaiting,
-		CurrentTurn:  0,
-		Initiative:   initiative,
-		Players:      players,
-		Units:        make(map[string]*Unit),
-		Board:        CreateBoard(len(players)),
-		ActionPoints: make(map[string]int),
-		History:      make([]HistoryRecord, 0),
+		GameID:      gameID,
+		CurrentTurn: 0,
+		Initiative:  initiative,
+		Players:     players,
+		Units:       make(map[string]*Unit),
+		Board:       CreateBoard(len(players)),
+		History:     make([]HistoryRecord, 0),
 	}
 }
 
@@ -95,15 +79,13 @@ func (gs *GameState) GetUnit(unitID string) (*Unit, bool) {
 }
 
 // GetCell 获取指定位置的格子信息
-func (gs *GameState) GetCell(position string) *BoardCell {
+func (gs *GameState) GetCell(position string) (*BoardCell, bool) {
 	gs.mutex.RLock()
 	defer gs.mutex.RUnlock()
 	if cell, exists := gs.Board.Cells[position]; exists {
-		return cell
+		return cell, true
 	}
-	return &BoardCell{
-		CellType: CellTypeNormal,
-	}
+	return nil, false
 }
 
 // AddHistoryRecord 添加历史记录
@@ -112,26 +94,20 @@ func (gs *GameState) AddHistoryRecord(actions []GameAction) {
 	defer gs.mutex.Unlock()
 }
 
-// UpdateStage 更新游戏阶段
-func (gs *GameState) UpdateStage(stage GameStage) {
-	gs.mutex.Lock()
-	defer gs.mutex.Unlock()
-	gs.Stage = stage
-}
-
 // NextTurn 进入下一回合
 func (gs *GameState) NextTurn() {
 	gs.mutex.Lock()
 	defer gs.mutex.Unlock()
+	initiative := gs.Initiative
+	initiativeIndex := 0
+	for i, player := range gs.Players {
+		if player.ID == initiative {
+			initiativeIndex = i
+			break
+		}
+	}
 	gs.CurrentTurn++
-	// 这里可以添加更多的回合切换逻辑
-}
-
-// UpdateActionPoints 更新行动点数
-func (gs *GameState) UpdateActionPoints(playerID string, points int) {
-	gs.mutex.Lock()
-	defer gs.mutex.Unlock()
-	gs.ActionPoints[playerID] = points
+	gs.CurrentPlayer = gs.Players[(initiativeIndex+gs.CurrentTurn)%len(gs.Players)].ID
 }
 
 // AddUnit 添加单位
@@ -149,12 +125,15 @@ func (gs *GameState) RemoveUnit(unitID string) {
 }
 
 // SetCellControl 设置格子控制权
-func (gs *GameState) SetCellControl(position string, playerID string) {
+func (gs *GameState) SetCellControl(position string, playerID string) bool {
 	gs.mutex.Lock()
 	defer gs.mutex.Unlock()
-	cell := gs.GetCell(position)
-	cell.ControlledBy = &playerID
-	gs.Board.Cells[position] = cell
+	if cell, exists := gs.GetCell(position); exists {
+		cell.ControlledBy = &playerID
+		gs.Board.Cells[position] = cell
+		return true
+	}
+	return false
 }
 
 // GetState 获取完整的游戏状态（用于序列化发送给前端）

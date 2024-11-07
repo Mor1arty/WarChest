@@ -76,6 +76,13 @@ func (s *GameService) CreateNewGame(players map[string]game.Team) *game.GameStat
 	return gameState
 }
 
+// RemoveGame 删除游戏
+func (s *GameService) RemoveGame(gameID string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	delete(s.games, gameID)
+}
+
 // HandleAction 处理游戏动作
 func (s *GameService) HandleAction(gameID string, action *game.GameAction) error {
 	s.mutex.Lock()

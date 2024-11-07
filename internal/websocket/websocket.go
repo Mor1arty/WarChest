@@ -39,7 +39,7 @@ type WebSocketServer struct {
 	clients     map[string]*Client
 	mutex       sync.RWMutex
 	gameService *service.GameService
-	authService *service.AuthHandler
+	authService *service.AuthService
 	rooms       map[string]*game.GameRoom // 游戏房间映射
 	userRooms   map[string]string         // 用户ID到房间ID的映射
 	roomMutex   sync.RWMutex
@@ -50,7 +50,7 @@ func checkOrigin(r *http.Request) bool {
 }
 
 // NewWebSocketServer 创建一个新的 WebSocket 服务器实例
-func NewWebSocketServer(port string, authService *service.AuthHandler) *WebSocketServer {
+func NewWebSocketServer(port string, authService *service.AuthService) *WebSocketServer {
 	return &WebSocketServer{
 		upgrader: websocket.Upgrader{
 			CheckOrigin: checkOrigin,
@@ -168,12 +168,16 @@ func (ws *WebSocketServer) readPump(client *Client) {
 
 		// 处理消息
 		switch clientMsg.Type {
-		case "CHECK_GAME":
-			log.Printf(client.UserID + " Check game")
-			ws.checkGameMatch(client)
-		case "JOIN_GAME":
-			log.Printf(client.UserID + " Join game")
-			ws.handleGameMatch(client)
+		case "CREATE_ROOM":
+			log.Printf(client.UserID + " Create room")
+			ws.handleCreateRoom(client)
+		case "JOIN_ROOM":
+			log.Printf(client.UserID + " Join room")
+			if ws.checkGameMatch(client) {
+				continue
+			} else {
+				ws.handleGameMatch(client)
+			}
 		case "LEAVE_ROOM":
 			log.Printf(client.UserID + " Leave room")
 			ws.handleLeaveRoom(client)
@@ -279,18 +283,68 @@ func (ws *WebSocketServer) BroadcastMessage(messageType int, message []byte) {
 }
 
 // 检查是否有正在进行中的游戏
-func (ws *WebSocketServer) checkGameMatch(client *Client) {
+func (ws *WebSocketServer) checkGameMatch(client *Client) bool {
 	ws.roomMutex.Lock()
 	defer ws.roomMutex.Unlock()
 
-	if room, exists := ws.userRooms[client.UserID]; exists {
-		if game, exists := ws.rooms[room]; exists {
-			ws.SendToClient(client, `{"type":"GAME_MATCH_FOUND","payload":{"roomId":"`+game.ID+`"}}`)
+	if roomID, exists := ws.userRooms[client.UserID]; exists {
+		if room, exists := ws.rooms[roomID]; exists {
+			log.Printf("room found: " + room.ID)
+			if room.Status == game.RoomStatusPlaying {
+				gameState, _ := json.Marshal(room.GameState)
+				log.Printf("send game state to client ")
+				ws.SendToClient(client, `{"type":"UPDATE_GAME_STATE", "payload": {"roomId": "`+room.ID+`", "gameState": `+string(gameState)+`}}`)
+				return true
+			}
 		}
 	}
+	return false
 }
 
-// 添加新方法来处理游戏匹配
+// 创建房间
+func (ws *WebSocketServer) createRoom(client *Client) string {
+	roomID := utils.GenerateUUID()
+	availableRoom := game.NewGameRoom(roomID, "房间-"+roomID)
+	ws.rooms[roomID] = availableRoom
+	ws.userRooms[client.UserID] = roomID
+	ws.SendToClient(client, `{"type":"ROOM_CREATED", "payload": {"roomId": "`+roomID+`"}}`)
+	return roomID
+}
+
+// 将玩家加入指定房间
+func (ws *WebSocketServer) addUserToRoom(client *Client, room *game.GameRoom) bool {
+	if len(room.Players) >= room.MaxPlayers {
+		return false
+	}
+
+	playerRole := game.TeamWhite
+	if len(room.Players) > 0 {
+		for _, role := range room.Players {
+			if role == game.TeamBlack {
+				playerRole = game.TeamWhite
+			} else {
+				playerRole = game.TeamBlack
+			}
+		}
+	} else {
+		if rand.Intn(2) == 0 {
+			playerRole = game.TeamBlack
+		}
+	}
+	room.Players[client.UserID] = playerRole
+	ws.userRooms[client.UserID] = room.ID
+
+	ws.SendToClient(client, `{"type":"JOIN_ROOM", "payload": {"success": true, "roomId": "`+room.ID+`"}}`)
+	return true
+}
+
+// 处理创建游戏房间
+func (ws *WebSocketServer) handleCreateRoom(client *Client) {
+	roomID := ws.createRoom(client)
+	ws.addUserToRoom(client, ws.rooms[roomID])
+}
+
+// 处理游戏匹配
 func (ws *WebSocketServer) handleGameMatch(client *Client) {
 	ws.roomMutex.Lock()
 	defer ws.roomMutex.Unlock()
@@ -306,28 +360,16 @@ func (ws *WebSocketServer) handleGameMatch(client *Client) {
 
 	// 2. 如果没有可用房间，创建新房间
 	if availableRoom == nil {
-		roomID := utils.GenerateUUID()
-		availableRoom = game.NewGameRoom(roomID)
-		ws.rooms[roomID] = availableRoom
+		roomID := ws.createRoom(client)
+		availableRoom = ws.rooms[roomID]
 	}
 
-	// 3. 将玩家加入房间
-	playerRole := game.TeamWhite
-	if len(availableRoom.Players) > 0 {
-		for _, role := range availableRoom.Players {
-			if role == game.TeamBlack {
-				playerRole = game.TeamWhite
-			} else {
-				playerRole = game.TeamBlack
-			}
-		}
+	success := ws.addUserToRoom(client, availableRoom)
+	if success {
+		ws.SendToClient(client, `{"type":"JOIN_ROOM", "payload": {"success": true, "roomId": "`+availableRoom.ID+`"}}`)
 	} else {
-		if rand.Intn(2) == 0 {
-			playerRole = game.TeamBlack
-		}
+		ws.SendToClient(client, `{"type":"JOIN_ROOM", "payload": {"success": false, "roomId": "`+availableRoom.ID+`"}}`)
 	}
-	availableRoom.Players[client.UserID] = playerRole
-	ws.userRooms[client.UserID] = availableRoom.ID
 
 	// 4. 如果房间满员，开始游戏
 	if len(availableRoom.Players) == availableRoom.MaxPlayers {
@@ -354,7 +396,6 @@ func (ws *WebSocketServer) handleGameMatch(client *Client) {
 func (ws *WebSocketServer) broadcastToRoom(roomID string, message interface{}) {
 	room, exists := ws.rooms[roomID]
 
-	log.Printf("here here")
 	if !exists {
 		log.Printf("room not found: " + roomID)
 		return
@@ -382,9 +423,24 @@ func (ws *WebSocketServer) handleLeaveRoom(client *Client) {
 		if room, exists := ws.rooms[roomID]; exists {
 			// 从房间中移除玩家
 			delete(room.Players, client.UserID)
+
 			// 如果房间空了，删除房间
 			if len(room.Players) == 0 {
 				delete(ws.rooms, roomID)
+			} else {
+				// 重制房间状态
+				room.Status = game.RoomStatusWaiting
+				if room.GameState != nil {
+					ws.gameService.RemoveGame(room.GameState.GameID)
+					room.GameState = nil
+				}
+				ws.broadcastToRoom(roomID, map[string]interface{}{
+					"type": "UPDATE_ROOM_STATE",
+					"payload": map[string]interface{}{
+						"roomId":     roomID,
+						"roomStatus": room.Status,
+					},
+				})
 			}
 		}
 		// 删除用户到房间的映射
