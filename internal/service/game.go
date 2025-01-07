@@ -5,20 +5,19 @@ import (
 	"sync"
 
 	"github.com/Mor1arty/WarChest/internal/game"
-	"github.com/Mor1arty/WarChest/internal/game/handler"
 	"github.com/Mor1arty/WarChest/pkg/utils"
 )
 
 type GameService struct {
 	games    map[string]*game.GameState // key: gameId
-	handlers map[game.GameActionType]handler.Handler
+	handlers map[game.ActionType]game.Handler
 	mutex    sync.RWMutex
 }
 
 func NewGameService() *GameService {
 	return &GameService{
 		games:    make(map[string]*game.GameState),
-		handlers: make(map[game.GameActionType]handler.Handler),
+		handlers: make(map[game.ActionType]game.Handler),
 	}
 }
 

@@ -5,18 +5,18 @@ import (
 	"fmt"
 )
 
-type GameActionType int
+type ActionType int
 
 const (
-	GameActionTypeMove GameActionType = iota
-	GameActionTypeAttack
-	GameActionTypeDeploy
-	GameActionTypeBolster
-	GameActionTypeClaimInitiative
-	GameActionTypeRecruit
-	GameActionTypePass
-	GameActionTypeControl
-	GameActionTypeClear
+	ActionTypeMove ActionType = iota
+	ActionTypeAttack
+	ActionTypeDeploy
+	ActionTypeBolster
+	ActionTypeClaimInitiative
+	ActionTypeRecruit
+	ActionTypePass
+	ActionTypeControl
+	ActionTypeClear
 )
 
 type ServerActionType int
@@ -74,30 +74,30 @@ type ControlPayload struct {
 
 // GameAction 游戏动作结构体，用于包装所有可能的操作
 type GameAction struct {
-	Type    GameActionType `json:"type"`
-	Payload interface{}    `json:"payload"`
+	Type    ActionType  `json:"type"`
+	Payload interface{} `json:"payload"`
 }
 
 // UnmarshalGameAction 根据动作类型解析对应的 Payload
-func UnmarshalGameAction(actionType GameActionType, payloadData []byte) (interface{}, error) {
+func UnmarshalGameAction(actionType ActionType, payloadData []byte) (interface{}, error) {
 	var payload interface{}
 
 	switch actionType {
-	case GameActionTypeMove:
+	case ActionTypeMove:
 		payload = &MovePayload{}
-	case GameActionTypeAttack:
+	case ActionTypeAttack:
 		payload = &AttackPayload{}
-	case GameActionTypeDeploy:
+	case ActionTypeDeploy:
 		payload = &DeployPayload{}
-	case GameActionTypeBolster:
+	case ActionTypeBolster:
 		payload = &BolsterPayload{}
-	case GameActionTypeClaimInitiative:
+	case ActionTypeClaimInitiative:
 		payload = &ClaimInitiativePayload{}
-	case GameActionTypeRecruit:
+	case ActionTypeRecruit:
 		payload = &RecruitPayload{}
-	case GameActionTypePass:
+	case ActionTypePass:
 		payload = &PassPayload{}
-	case GameActionTypeControl:
+	case ActionTypeControl:
 		payload = &ControlPayload{}
 	default:
 		return nil, fmt.Errorf("unknown action type: %v", actionType)
@@ -111,11 +111,11 @@ func UnmarshalGameAction(actionType GameActionType, payloadData []byte) (interfa
 }
 
 // ValidatePayload 验证 Payload 数据的有效性
-func ValidatePayload(actionType GameActionType, payload interface{}) error {
+func ValidatePayload(actionType ActionType, payload interface{}) error {
 	switch actionType {
-	case GameActionTypeMove:
+	case ActionTypeMove:
 		return validateMovePayload(payload.(*MovePayload))
-	case GameActionTypeAttack:
+	case ActionTypeAttack:
 		return validateAttackPayload(payload.(*AttackPayload))
 		// ... 其他验证函数
 	}
